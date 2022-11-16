@@ -1,6 +1,6 @@
 # ALScA-framework-for-PUF-modeling
 
-Authors: wei liu
+Authors:  Liu. Wei
 
 ALScA-framework-for-PUF-modeling contains the following source codes: python codes for running auxiliary learning side-channel attacks on Arbiter-based PUFs.
 
