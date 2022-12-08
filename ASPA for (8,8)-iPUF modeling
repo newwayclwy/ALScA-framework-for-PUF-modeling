@@ -1,0 +1,65 @@
+# The code of ASPA for (8,8)-iPUF modeling
+# hard parameter sharing architecture; generated auxiliary task 
+import numpy as np
+import keras
+import keras_metrics
+import pandas as pd
+from keras import layers 
+from keras.layers import Input,Embedding,LSTM,Dense,Dropout
+from keras.models import Model
+from keras.callbacks import EarlyStopping
+from keras.callbacks import TensorBoard 
+from sklearn import model_selection
+from sklearn.model_selection import train_test_split
+
+tbCallBack = keras.callbacks.TensorBoard(log_dir='./Graph/(8,8)iPUF', 
+histogram_freq=1, 
+write_graph=True, 
+write_images=True)         
+
+# load training data
+df_challenge=pd.read_csv('./multitask/iPUF/o_(8,8)iPUF.csv',header=None)    # challenges of PUF
+df_response=pd.read_csv('./multitask/iPUF/r_(8,8)iPUF.csv',header=None)     # responses of PUF
+df_label=pd.read_csv('./multitask/iPUF/label_(8,8)iPUF.csv',header=None)     # labels of grouped information which contain a specific power level and a response
+
+X = df_challenge.iloc[:600000,:129]                                     
+Y = df_response.iloc[:600000,:1]
+Z = df_label.iloc[:600000,:1]
+
+# create model ; implemented with hard parameter sharing architecture, generated auxiliary task.
+w = 1                                                             # loss weight ratio
+class_number=17                                                   # number of classes, corresponding to grouped information
+main_input=Input(shape=(129,),dtype='int32',name='main_input')
+main_output=Input(shape=(1,),dtype='bool',name='main_output')
+auxiliary_output=Input(shape=(1,),dtype='int32',name='auxiliary_output')
+x=Dense(100,activation='relu')(main_input)
+x=Dense(100,activation='relu')(x)
+x=Dense(100,activation='relu')(x)
+x=Dense(100,activation='relu')(x)
+x=Dense(100,activation='relu')(x)
+main_output=Dense(1,activation='sigmoid',name='main_output')(x)              # for response
+auxiliary_output=Dense(class_number,activation='softmax',name='aux_output')(x)  # for labels of grouped information
+
+model=Model(inputs=[main_input],outputs=[main_output,auxiliary_output])
+model.summary()
+
+train_challenges, test_challenges,train_responses,test_responses ,train_labels,test_labels = model_selection.train_test_split(X, Y, Z,test_size = 0.2, random_state = 42)
+
+model.compile(optimizer='Adam',
+              loss={'main_output':'binary_crossentropy','aux_output':'sparse_categorical_crossentropy'},
+              loss_weights={'main_output':1 ,'aux_output': w },                                
+              metrics=['accuracy',keras_metrics.precision(), keras_metrics.recall()]
+)
+
+results=model.fit({'main_input':train_challenges},{'main_output':train_responses,'aux_output':train_labels},
+               epochs=200,batch_size=1000,
+               validation_data = (test_challenges,[test_responses,test_labels]),
+               callbacks = [EarlyStopping(patience=50,mode='min',verbose=1), tbCallBack]
+              )       
+# evaluate the model
+scores =model.evaluate(test_challenges, [test_responses,test_labels]) 
+print("\n%s: %.2f%%" % (model.metrics_names[3], scores[3]*100))
+response_accuracy=scores[3]
+label_accuracy=scores[6]
+print(response_accuracy,label_accuracy)
+ 
